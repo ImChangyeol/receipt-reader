@@ -1,0 +1,17 @@
+# Secrets and local settings
+.env
+settings.json
+
+# Your receipts, ledgers and backups stay on your computer
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db

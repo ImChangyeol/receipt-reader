@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Receipt Reader</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f3f4f6; color: #111827; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
+  .wrap { width: 100%; max-width: 600px; }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  h1 { font-size: 22px; }
+  .sub { color: #6b7280; font-size: 14px; margin-top: 4px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; padding: 8px 14px; border: 1px solid #d1d5db; background: #fff; color: #111827; }
+  .primary { background: #111827; color: #fff; border-color: #111827; }
+  .drop { border: 2px dashed #9ca3af; border-radius: 14px; background: #fff; padding: 56px 20px; text-align: center; cursor: pointer; }
+  .drop.over { background: #eef2ff; border-color: #4f46e5; }
+  .drop p { font-size: 16px; color: #374151; margin-bottom: 6px; }
+  .drop small { color: #9ca3af; }
+  #file { display: none; }
+  .status { margin-top: 18px; color: #4f46e5; font-size: 14px; min-height: 20px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px; margin-top: 14px; }
+  .card.err { border-color: #fca5a5; background: #fef2f2; }
+  .card h3 { font-size: 15px; margin-bottom: 10px; }
+  .badge { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 999px; margin-left: 6px; background: #eef2ff; color: #3730a3; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 13px; }
+  .grid .k { color: #6b7280; font-size: 11px; }
+  .grid .wide { grid-column: span 2; }
+  .muted { color: #6b7280; font-size: 12px; margin-top: 10px; }
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); align-items: center; justify-content: center; padding: 20px; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 12px; padding: 22px; width: 100%; max-width: 480px; }
+  .modal h2 { font-size: 18px; margin-bottom: 8px; }
+  .modal label { display: block; font-size: 13px; color: #374151; margin: 14px 0 6px; }
+  .modal input { width: 100%; padding: 9px 10px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; }
+  .modal .row { display: flex; gap: 8px; margin-top: 18px; }
+  .ok { color: #047857; } .bad { color: #b91c1c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Receipt Reader</h1>
+      <p class="sub">Drop receipts here. Each one becomes a row in this month's Excel ledger.</p>
+    </div>
+    <button id="openSettings">Settings</button>
+  </div>
+
+  <div class="drop" id="drop">
+    <p>Drag receipts here, or click to choose files</p>
+    <small>JPG, PNG, WEBP or PDF</small>
+  </div>
+  <input type="file" id="file" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple>
+  <p class="status" id="status"></p>
+  <div id="results"></div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2>Settings</h2>
+    <p class="muted" id="keyInfo"></p>
+    <label for="key">Gemini API key</label>
+    <input id="key" type="password" placeholder="Paste a key from Google AI Studio">
+    <p class="muted">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. It is saved only on this computer.</p>
+    <label for="folder">Data folder (optional)</label>
+    <input id="folder" placeholder="Leave empty to use the data folder in this project">
+    <div class="row">
+      <button class="primary" id="save">Save</button>
+      <button id="test">Test key</button>
+      <button id="close">Close</button>
+    </div>
+    <p class="muted" id="settingsMsg"></p>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = v => (v === null || v === undefined || v === '') ? '-' : Number(v).toLocaleString();
+
+$('drop').onclick = () => $('file').click();
+$('drop').ondragover = e => { e.preventDefault(); $('drop').classList.add('over'); };
+$('drop').ondragleave = () => $('drop').classList.remove('over');
+$('drop').ondrop = e => { e.preventDefault(); $('drop').classList.remove('over'); handle(e.dataTransfer.files); };
+$('file').onchange = e => handle(e.target.files);
+
+async function handle(fileList) {
+  const files = Array.from(fileList);
+  for (let i = 0; i < files.length; i++) {
+    $('status').textContent = `Reading ${files[i].name} (${i + 1} of ${files.length})...`;
+    const body = new FormData();
+    body.append('file', files[i]);
+    let data;
+    try { data = await (await fetch('/api/upload', { method: 'POST', body })).json(); }
+    catch (e) { data = { ok: false, error: 'Could not reach the app: ' + e.message }; }
+    $('results').insertAdjacentHTML('afterbegin', render(files[i].name, data));
+  }
+  $('status').textContent = files.length ? 'Done.' : '';
+  $('file').value = '';
+}
+
+function render(name, data) {
+  if (!data.ok) return `<div class="card err"><h3>${esc(name)}</h3><p>${esc(data.error)}</p></div>`;
+  return data.results.map(r => {
+    const d = r.data;
+    return `<div class="card">
+      <h3>${esc(name)}${data.results.length > 1 ? ' p.' + r.page : ''} <span class="badge">${esc(r.category)}</span></h3>
+      <div class="grid">
+        <div><div class="k">Date</div>${esc(d.date)}</div>
+        <div><div class="k">Time</div>${esc(d.time || '-')}</div>
+        <div class="wide"><div class="k">Vendor</div>${esc(d.vendor || '-')}</div>
+        <div class="wide"><div class="k">Description</div>${esc(d.description || '-')}</div>
+        <div><div class="k">Subtotal</div>${num(d.subtotal)}</div>
+        <div><div class="k">Sales tax</div>${num(d.sales_tax)}</div>
+        <div><div class="k">Total</div>${num(d.total)}</div>
+        <div><div class="k">Qty</div>${num(d.quantity)}</div>
+      </div>
+      <p class="muted">Saved to ${esc(r.workbook)}, sheet "${esc(r.category)}"</p>
+    </div>`;
+  }).join('');
+}
+
+$('openSettings').onclick = async () => {
+  $('overlay').classList.add('open');
+  $('settingsMsg').textContent = '';
+  const s = await (await fetch('/api/settings')).json();
+  $('keyInfo').textContent = s.has_key ? `Key saved (${s.key_hint}). Model: ${s.model}` : 'No key saved yet.';
+};
+$('close').onclick = () => $('overlay').classList.remove('open');
+$('save').onclick = async () => {
+  const payload = {};
+  if ($('folder').value.trim()) payload.data_dir = $('folder').value.trim();
+  if ($('key').value.trim()) payload.gemini_api_key = $('key').value.trim();
+  const res = await (await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).json();
+  $('settingsMsg').textContent = res.ok ? 'Saved.' : res.error;
+  $('settingsMsg').className = 'muted ' + (res.ok ? 'ok' : 'bad');
+  $('key').value = '';
+};
+$('test').onclick = async () => {
+  const res = await (await fetch('/api/settings/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: $('key').value.trim() }) })).json();
+  $('settingsMsg').textContent = res.ok ? 'The key works.' : res.error;
+  $('settingsMsg').className = 'muted ' + (res.ok ? 'ok' : 'bad');
+};
+</script>
+</body>
+</html>
