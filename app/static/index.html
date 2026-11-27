@@ -27,6 +27,10 @@
   .grid .k { color: #6b7280; font-size: 11px; }
   .grid .wide { grid-column: span 2; }
   .muted { color: #6b7280; font-size: 12px; margin-top: 10px; }
+  .items { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  .items th { text-align: left; color: #6b7280; font-weight: 600; border-bottom: 1px solid #e5e7eb; padding: 6px 4px; }
+  .items td { border-bottom: 1px solid #f3f4f6; padding: 6px 4px; }
+  .items .n { text-align: right; }
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); align-items: center; justify-content: center; padding: 20px; }
   .overlay.open { display: flex; }
   .modal { background: #fff; border-radius: 12px; padding: 22px; width: 100%; max-width: 480px; }
@@ -104,19 +108,25 @@ function render(name, data) {
   if (!data.ok) return `<div class="card err"><h3>${esc(name)}</h3><p>${esc(data.error)}</p></div>`;
   return data.results.map(r => {
     const d = r.data;
+    const rows = d.items.map(it => `<tr>
+        <td>${esc(it.description || '-')}</td><td class="n">${num(it.quantity)}</td>
+        <td class="n">${num(it.amount)}</td><td class="n">${num(it.total)}</td>
+        <td><span class="badge">${esc(it.category)}</span></td></tr>`).join('');
     return `<div class="card">
-      <h3>${esc(name)}${data.results.length > 1 ? ' p.' + r.page : ''} <span class="badge">${esc(r.category)}</span></h3>
+      <h3>${esc(name)}${data.results.length > 1 ? ' p.' + r.page : ''}</h3>
       <div class="grid">
         <div><div class="k">Date</div>${esc(d.date)}</div>
         <div><div class="k">Time</div>${esc(d.time || '-')}</div>
         <div class="wide"><div class="k">Vendor</div>${esc(d.vendor || '-')}</div>
-        <div class="wide"><div class="k">Description</div>${esc(d.description || '-')}</div>
         <div><div class="k">Subtotal</div>${num(d.subtotal)}</div>
         <div><div class="k">Sales tax</div>${num(d.sales_tax)}</div>
         <div><div class="k">Total</div>${num(d.total)}</div>
-        <div><div class="k">Qty</div>${num(d.quantity)}</div>
       </div>
-      <p class="muted">Saved to ${esc(r.workbook)}, sheet "${esc(r.category)}"</p>
+      <table class="items">
+        <tr><th>Item</th><th class="n">Qty</th><th class="n">Amount</th><th class="n">With tax</th><th>Sheet</th></tr>
+        ${rows}
+      </table>
+      <p class="muted">Saved ${d.items.length} row${d.items.length > 1 ? 's' : ''} to ${esc(r.workbook)}</p>
     </div>`;
   }).join('');
 }

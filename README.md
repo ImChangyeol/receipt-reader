@@ -1,6 +1,6 @@
 # Receipt Reader
 
-Drop in a photo or PDF of a receipt. A vision model reads it, and the receipt becomes a row in that month's Excel ledger, filed under the right category.
+Drop in a photo or PDF of a receipt. A vision model reads it, and each item on the receipt becomes a row in that month's Excel ledger, filed under the right category.
 
 ## How it works
 
@@ -9,12 +9,12 @@ flowchart LR
     A["Receipt<br/>photo or PDF"] --> B["Gemini reads it<br/>(fixed JSON schema)"]
     B --> C["Clean and check<br/>numbers, dates, category"]
     C --> D["Back up<br/>the workbook"]
-    D --> E["Add a row to<br/>this month's Excel file"]
+    D --> E["Add a row per item to<br/>this month's Excel file"]
 ```
 
-- **Structured output.** The request includes a response schema, so the model always answers with the same JSON fields instead of free text.
-- **Cleaning rules.** Prices like `$1,234.50` become numbers, dates become real Excel dates, and a few fixed rules correct common category mix-ups.
-- **Safe writes.** The month's workbook is copied to `data/backups/` before every change. Then the new row is added and the summary is rebuilt.
+- **Structured output.** The request includes a response schema, so the model always answers with the same JSON fields, including a list of the items on the receipt, instead of free text.
+- **Cleaning rules.** Prices like `$1,234.50` become numbers, dates become real Excel dates, and a few fixed rules correct common category mix-ups. If the tax is missing, it is worked out from the subtotal and total. Each item gets its share of the tax, so the rows of one receipt add up to the amount paid.
+- **Safe writes.** The month's workbook is copied to `data/backups/` before every change. Then the new rows are added and the summary is rebuilt.
 
 ## Why Gemini
 

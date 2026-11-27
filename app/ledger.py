@@ -1,9 +1,9 @@
 """Write receipts into one Excel workbook per month.
 
 Each workbook has a Summary sheet plus one sheet per category
-(Gas & Fuel, Meals, Tools, Supplies & Materials). New receipts are added to the existing
-workbook, sorted newest first, and the Summary is rebuilt every time.
-Before any change, the current file is copied to backups/.
+(Gas & Fuel, Meals, Tools, Supplies & Materials). Every item on a receipt becomes
+its own row on its category's sheet, sorted newest first, and the Summary is
+rebuilt every time. Before any change, the current file is copied to backups/.
 """
 
 import shutil
@@ -18,7 +18,7 @@ from .extract import CATEGORIES
 
 SUMMARY = "Summary"
 COLUMNS = ["Date", "Time", "Vendor", "Description", "Qty", "Unit Price",
-           "Subtotal", "Sales Tax", "Total", "Vendor Address", "Receipt File"]
+           "Amount", "Sales Tax", "Total", "Vendor Address", "Receipt File"]
 WIDTHS = [12, 8, 24, 30, 7, 11, 12, 11, 12, 34, 22]
 MONEY_COLS = [6, 7, 8, 9]  # 1-based
 QTY_COL = 5
@@ -34,13 +34,14 @@ def workbook_path(day: date) -> Path:
     return config.ledgers_dir() / f"{day:%Y-%m}.xlsx"
 
 
-def save_record(record: dict, source_name: str) -> Path:
-    """Add one cleaned receipt to its month's workbook. Returns the file path."""
-    path = workbook_path(record["date"])
+def save_receipt(receipt: dict, source_name: str) -> Path:
+    """Add every item of one cleaned receipt to its month's workbook. Returns the file path."""
+    path = workbook_path(receipt["date"])
     backup(path)
     wb = open_workbook(path)
-    insert_newest_first(wb[record["category"]], row_values(record, source_name))
-    rebuild_summary(wb, f"{record['date']:%Y-%m}")
+    for item in reversed(receipt["items"]):  # reversed so the printed order survives newest-first inserts
+        insert_newest_first(wb[item["category"]], row_values(receipt, item, source_name))
+    rebuild_summary(wb, f"{receipt['date']:%Y-%m}")
     wb.save(path)
     return path
 
@@ -80,10 +81,10 @@ def setup_sheet(ws) -> None:
     ws.freeze_panes = "A2"
 
 
-def row_values(record: dict, source_name: str) -> list:
-    return [record["date"], record["time"], record["vendor"], record["description"],
-            record["quantity"], record["unit_price"], record["subtotal"],
-            record["sales_tax"], record["total"], record["vendor_address"], source_name]
+def row_values(receipt: dict, item: dict, source_name: str) -> list:
+    return [receipt["date"], receipt["time"], receipt["vendor"], item["description"],
+            item["quantity"], item["unit_price"], item["amount"],
+            item["sales_tax"], item["total"], receipt["vendor_address"], source_name]
 
 
 def insert_newest_first(ws, values: list) -> None:

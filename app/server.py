@@ -1,4 +1,4 @@
-"""Small local web app: drop receipts in the browser, get rows in Excel."""
+"""Small local web app: drop receipts in the browser, get one Excel row per item."""
 
 from pathlib import Path
 
@@ -29,13 +29,13 @@ def process_file(filename: str, content: bytes) -> list[dict]:
 
     results = []
     for page_no, (image, mime) in enumerate(images, 1):
-        record = extract.call_gemini(image, mime)
-        path = ledger.save_record(record, name)
+        receipt = extract.call_gemini(image, mime)
+        path = ledger.save_receipt(receipt, name)
         results.append({
             "page": page_no,
-            "category": record["category"],
+            "categories": list(dict.fromkeys(it["category"] for it in receipt["items"])),
             "workbook": f"data/ledgers/{path.name}",
-            "data": _jsonable(record),
+            "data": _jsonable(receipt),
         })
 
     (config.processed_dir() / name).write_bytes(content)
@@ -102,8 +102,8 @@ def test_key(payload: dict):
     return {"ok": False, "error": f"Gemini answered {res.status_code}. Check the key."}
 
 
-def _jsonable(record: dict) -> dict:
-    out = dict(record)
-    out["date"] = record["date"].isoformat()
-    out["time"] = record["time"].strftime("%H:%M") if record["time"] else ""
+def _jsonable(receipt: dict) -> dict:
+    out = dict(receipt)
+    out["date"] = receipt["date"].isoformat()
+    out["time"] = receipt["time"].strftime("%H:%M") if receipt["time"] else ""
     return out
